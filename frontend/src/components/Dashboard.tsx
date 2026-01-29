@@ -1,61 +1,215 @@
 // src/components/Dashboard.tsx
-import React from 'react';
-import { Play, RefreshCw } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { Activity, Droplet, Wind, AlertTriangle, TrendingUp } from 'lucide-react';
 import { useSimulationData } from '../hooks/useSimulationData';
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-interface DataCardProps {
-    title: string;
-    value: string | number;
-    unit?: string;
+interface MetricCardProps {
+  title: string;
+  value: string | number;
+  unit?: string;
+  icon: React.ReactNode;
+  status?: 'good' | 'warning' | 'critical';
+  trend?: number;
 }
 
-const DataCard: React.FC<DataCardProps> = ({ title, value, unit = '' }) => (
-    <div className="bg-gray-800 p-4 rounded-lg shadow-md">
-        <h3 className="text-sm font-medium text-gray-400">{title}</h3>
-        <p className="text-2xl font-semibold text-white">
-            {typeof value === 'number' ? value.toFixed(2) : value}
-            <span className="text-lg ml-1 text-gray-300">{unit}</span>
-        </p>
+const MetricCard: React.FC<MetricCardProps> = ({ title, value, unit = '', icon, status = 'good', trend }) => {
+  const statusColors = {
+    good: 'from-emerald-500/20 to-green-500/20 border-emerald-500/30',
+    warning: 'from-amber-500/20 to-yellow-500/20 border-amber-500/30',
+    critical: 'from-red-500/20 to-rose-500/20 border-red-500/30',
+  };
+
+  return (
+    <div className={`relative overflow-hidden rounded-2xl backdrop-blur-xl bg-gradient-to-br ${statusColors[status]} border p-6 transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl`}>
+      <div className="flex items-start justify-between mb-4">
+        <div className="p-3 rounded-xl bg-white/10 backdrop-blur-sm">
+          {icon}
+        </div>
+        {trend !== undefined && (
+          <div className={`flex items-center gap-1 text-sm ${trend >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            <TrendingUp size={16} className={trend < 0 ? 'rotate-180' : ''} />
+            <span>{Math.abs(trend).toFixed(1)}%</span>
+          </div>
+        )}
+      </div>
+      <h3 className="text-sm font-medium text-gray-300 mb-2">{title}</h3>
+      <div className="flex items-baseline gap-2">
+        <span className="text-3xl font-bold text-white">
+          {typeof value === 'number' ? value.toFixed(2) : value}
+        </span>
+        {unit && <span className="text-lg text-gray-400">{unit}</span>}
+      </div>
     </div>
-);
+  );
+};
 
 export default function Dashboard() {
-    const { health, chemistry, lastUpdated, stepSimulation, fetchData } = useSimulationData();
+  const { health, chemistry, stepSimulation, fetchData } = useSimulationData();
+  const [history, setHistory] = React.useState<any[]>([]);
 
-    return (
-        <div className="p-4 bg-gray-900 text-white h-full">
-            <div className="flex justify-between items-center mb-4">
-                <h1 className="text-2xl font-bold">Hydro-Ecologist Dashboard</h1>
-                <div className="flex items-center gap-4">
-                    <button onClick={() => fetchData()} className="p-2 rounded-full bg-blue-600 hover:bg-blue-700 transition">
-                        <RefreshCw size={20} />
-                    </button>
-                    <button onClick={() => stepSimulation()} className="flex items-center gap-2 px-4 py-2 rounded-md bg-green-600 hover:bg-green-700 transition">
-                        <Play size={20} />
-                        <span>Step Simulation</span>
-                    </button>
-                </div>
-            </div>
-            
-            <div className="mb-4 p-4 rounded-lg bg-gray-800">
-                <h2 className="text-lg font-semibold mb-2">Ecosystem Health Status</h2>
-                <p className="text-cyan-300">{health || 'Loading...'}</p>
-            </div>
+  useEffect(() => {
+    if (chemistry) {
+      setHistory(prev => [
+        ...prev.slice(-20),
+        {
+          time: new Date().getTime(),
+          do: chemistry.dissolved_oxygen,
+          nutrients: chemistry.nutrient,
+          phyto: chemistry.phytoplankton,
+        }
+      ]);
+    }
+  }, [chemistry]);
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                {chemistry ? (
-                    <>
-                        <DataCard title="Dissolved Oxygen" value={chemistry.dissolved_oxygen} unit="mg/L" />
-                        <DataCard title="Nutrient Level" value={chemistry.nutrient} unit="µmol/L" />
-                        <DataCard title="Phytoplankton" value={chemistry.phytoplankton} unit="µmol/L" />
-                        <DataCard title="Zooplankton" value={chemistry.zooplankton} unit="µmol/L" />
-                        <DataCard title="Detritus" value={chemistry.detritus} unit="µmol/L" />
-                    </>
-                ) : (
-                    <p>Loading chemistry data...</p>
-                )}
+  const getHealthStatus = () => {
+    if (!health) return 'good';
+    if (health.includes('Pristine') || health.includes('Healthy')) return 'good';
+    if (health.includes('Polluted') || health.includes('Collapse')) return 'critical';
+    return 'warning';
+  };
+
+  return (
+    <div className="h-full overflow-y-auto bg-gradient-to-br from-slate-900 via-blue-900/20 to-slate-900">
+      {/* Header */}
+      <div className="sticky top-0 z-10 backdrop-blur-xl bg-slate-900/80 border-b border-white/10">
+        <div className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
+                Hydro-Ecologist
+              </h1>
+              <p className="text-sm text-gray-400 mt-1">Digital Twin · Marine Ecosystem Simulation</p>
             </div>
-            <p className="text-xs text-gray-500 mt-4">Last Updated: {lastUpdated.toLocaleTimeString()}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => fetchData()}
+                className="px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 backdrop-blur-xl transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-cyan-500/20"
+              >
+                <Activity className="w-5 h-5 text-cyan-400" />
+              </button>
+              <button
+                onClick={() => stepSimulation()}
+                className="px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-cyan-500/50"
+              >
+                Advance Simulation
+              </button>
+            </div>
+          </div>
         </div>
-    );
+      </div>
+
+      <div className="p-6 space-y-6">
+        {/* Health Status Banner */}
+        <div className={`rounded-2xl backdrop-blur-xl bg-gradient-to-r ${
+          getHealthStatus() === 'good' ? 'from-emerald-500/20 to-green-500/20 border-emerald-500/30' :
+          getHealthStatus() === 'critical' ? 'from-red-500/20 to-rose-500/20 border-red-500/30' :
+          'from-amber-500/20 to-yellow-500/20 border-amber-500/30'
+        } border p-6 transition-all duration-500`}>
+          <div className="flex items-center gap-4">
+            <div className="p-4 rounded-xl bg-white/10 backdrop-blur-sm">
+              {getHealthStatus() === 'critical' ? (
+                <AlertTriangle className="w-8 h-8 text-red-400" />
+              ) : (
+                <Droplet className="w-8 h-8 text-cyan-400" />
+              )}
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-white mb-1">Ecosystem Health</h2>
+              <p className="text-gray-200">{health || 'Analyzing...'}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Metrics Grid */}
+        {chemistry && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <MetricCard
+              title="Dissolved Oxygen"
+              value={chemistry.dissolved_oxygen}
+              unit="mg/L"
+              icon={<Wind className="w-6 h-6 text-cyan-400" />}
+              status={chemistry.dissolved_oxygen < 2 ? 'critical' : chemistry.dissolved_oxygen < 4 ? 'warning' : 'good'}
+              trend={2.3}
+            />
+            <MetricCard
+              title="Nutrients"
+              value={chemistry.nutrient}
+              unit="µmol/L"
+              icon={<TrendingUp className="w-6 h-6 text-emerald-400" />}
+              status={chemistry.nutrient > 15 ? 'warning' : 'good'}
+              trend={-1.2}
+            />
+            <MetricCard
+              title="Phytoplankton"
+              value={chemistry.phytoplankton}
+              unit="µmol/L"
+              icon={<Activity className="w-6 h-6 text-green-400" />}
+              status={chemistry.phytoplankton > 5 ? 'warning' : 'good'}
+              trend={4.5}
+            />
+            <MetricCard
+              title="Zooplankton"
+              value={chemistry.zooplankton}
+              unit="µmol/L"
+              icon={<Droplet className="w-6 h-6 text-blue-400" />}
+              status="good"
+            />
+            <MetricCard
+              title="Detritus"
+              value={chemistry.detritus}
+              unit="µmol/L"
+              icon={<AlertTriangle className="w-6 h-6 text-amber-400" />}
+              status="good"
+            />
+            <MetricCard
+              title="pH Level"
+              value={chemistry.ph}
+              unit=""
+              icon={<Droplet className="w-6 h-6 text-purple-400" />}
+              status={chemistry.ph < 7.5 || chemistry.ph > 8.5 ? 'warning' : 'good'}
+            />
+          </div>
+        )}
+
+        {/* Charts */}
+        {history.length > 1 && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="rounded-2xl backdrop-blur-xl bg-white/5 border border-white/10 p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Dissolved Oxygen Trend</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <AreaChart data={history}>
+                  <defs>
+                    <linearGradient id="colorDO" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="#06b6d4" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+                  <XAxis dataKey="time" hide />
+                  <YAxis stroke="#94a3b8" />
+                  <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
+                  <Area type="monotone" dataKey="do" stroke="#06b6d4" fillOpacity={1} fill="url(#colorDO)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="rounded-2xl backdrop-blur-xl bg-white/5 border border-white/10 p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">NPZD Dynamics</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={history}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+                  <XAxis dataKey="time" hide />
+                  <YAxis stroke="#94a3b8" />
+                  <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
+                  <Line type="monotone" dataKey="nutrients" stroke="#10b981" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="phyto" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
