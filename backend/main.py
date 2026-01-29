@@ -47,6 +47,29 @@ def trigger_simulation_step():
     run_simulation_step()
     return {"message": "Simulation advanced by one step."}
 
+@app.post("/simulation/reset", tags=["Simulation"])
+def reset_simulation():
+    """
+    Resets the simulation to pristine initial state.
+    """
+    global physics_solver, chemistry_solver, biology_solver
+    physics_solver = PhysicsSolver(grid_shape=(100, 100))
+    chemistry_solver = ChemistrySolver()
+    biology_solver = BiologySolver()
+    return {"message": "Simulation reset to initial state."}
+
+@app.post("/simulation/inject", tags=["Simulation"])
+def inject_parameters(nutrient: float = 0, pollutant: float = 0):
+    """
+    Injects nutrients or pollutants into the system.
+    """
+    if nutrient > 0:
+        chemistry_solver.parameters["nutrient"] += nutrient
+    if pollutant > 0:
+        chemistry_solver.parameters["bod"] += pollutant
+        chemistry_solver.parameters["dissolved_oxygen"] -= pollutant * 0.5
+    return {"message": f"Injected nutrient: {nutrient}, pollutant: {pollutant}"}
+
 @app.get("/status/health", tags=["Status"])
 def get_ecosystem_health():
     """
@@ -60,6 +83,17 @@ def get_chemistry_parameters():
     Retrieves the current chemical parameters of the water body.
     """
     return chemistry_solver.parameters
+
+@app.get("/status/all", tags=["Status"])
+def get_all_status():
+    """
+    Retrieves all simulation data in one call.
+    """
+    return {
+        "chemistry": chemistry_solver.parameters,
+        "health_status": biology_solver.get_health_status(),
+        "biology": biology_solver.indicator_species
+    }
 
 @app.get("/status/flow", tags=["Status"])
 def get_flow_at_point(x: int = 50, y: int = 50):

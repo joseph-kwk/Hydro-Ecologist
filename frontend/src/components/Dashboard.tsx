@@ -1,6 +1,6 @@
 // src/components/Dashboard.tsx
 import React, { useEffect } from 'react';
-import { Activity, Droplet, Wind, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Activity, Droplet, Wind, AlertTriangle, TrendingUp, Play, Pause, RotateCcw, Download, Beaker } from 'lucide-react';
 import { useSimulationData } from '../hooks/useSimulationData';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -45,8 +45,39 @@ const MetricCard: React.FC<MetricCardProps> = ({ title, value, unit = '', icon, 
 };
 
 export default function Dashboard() {
-  const { health, chemistry, stepSimulation, fetchData } = useSimulationData();
+  const { health, chemistry, stepSimulation, fetchData, resetSimulation, injectParameters, exportData } = useSimulationData();
   const [history, setHistory] = React.useState<any[]>([]);
+  const [isAutoPlay, setIsAutoPlay] = React.useState(false);
+  const [nutrientSlider, setNutrientSlider] = React.useState(0);
+  const [pollutantSlider, setPollutantSlider] = React.useState(0);
+
+  // Auto-play functionality
+  useEffect(() => {
+    if (isAutoPlay) {
+      const interval = setInterval(() => {
+        stepSimulation();
+      }, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [isAutoPlay, stepSimulation]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        stepSimulation();
+      } else if (e.code === 'KeyR' && !e.ctrlKey) {
+        e.preventDefault();
+        fetchData();
+      } else if (e.code === 'KeyP') {
+        e.preventDefault();
+        setIsAutoPlay(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [stepSimulation, fetchData]);
 
   useEffect(() => {
     if (chemistry) {
@@ -85,14 +116,37 @@ export default function Dashboard() {
               <button
                 onClick={() => fetchData()}
                 className="px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 backdrop-blur-xl transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-cyan-500/20"
+                title="Refresh (R)"
               >
                 <Activity className="w-5 h-5 text-cyan-400" />
               </button>
               <button
+                onClick={() => setIsAutoPlay(!isAutoPlay)}
+                className={`px-6 py-3 rounded-xl ${isAutoPlay ? 'bg-amber-500/20 border-amber-500/30' : 'bg-white/5 border-white/10'} border backdrop-blur-xl transition-all duration-300 hover:scale-105`}
+                title="Auto-play (P)"
+              >
+                {isAutoPlay ? <Pause className="w-5 h-5 text-amber-400" /> : <Play className="w-5 h-5 text-cyan-400" />}
+              </button>
+              <button
                 onClick={() => stepSimulation()}
                 className="px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-cyan-500/50"
+                title="Step (Space)"
               >
-                Advance Simulation
+                Advance
+              </button>
+              <button
+                onClick={() => resetSimulation()}
+                className="px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 backdrop-blur-xl transition-all duration-300 hover:scale-105"
+                title="Reset simulation"
+              >
+                <RotateCcw className="w-5 h-5 text-gray-400" />
+              </button>
+              <button
+                onClick={() => exportData()}
+                className="px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 backdrop-blur-xl transition-all duration-300 hover:scale-105"
+                title="Export data"
+              >
+                <Download className="w-5 h-5 text-gray-400" />
               </button>
             </div>
           </div>
@@ -100,6 +154,71 @@ export default function Dashboard() {
       </div>
 
       <div className="p-6 space-y-6">
+        {/* Parameter Controls */}
+        <div className="rounded-2xl backdrop-blur-xl bg-white/5 border border-white/10 p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Beaker className="w-6 h-6 text-purple-400" />
+            <h3 className="text-lg font-semibold text-white">Parameter Controls</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="flex items-center justify-between text-sm text-gray-300 mb-2">
+                <span>Inject Nutrients</span>
+                <span className="text-cyan-400">{nutrientSlider.toFixed(1)} µmol/L</span>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="20"
+                step="0.5"
+                value={nutrientSlider}
+                onChange={(e) => setNutrientSlider(parseFloat(e.target.value))}
+                className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+              />
+              <button
+                onClick={() => {
+                  injectParameters(nutrientSlider, 0);
+                  setNutrientSlider(0);
+                }}
+                disabled={nutrientSlider === 0}
+                className="mt-3 w-full px-4 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                Add Nutrients
+              </button>
+            </div>
+            <div>
+              <label className="flex items-center justify-between text-sm text-gray-300 mb-2">
+                <span>Inject Pollutants</span>
+                <span className="text-red-400">{pollutantSlider.toFixed(1)} mg/L</span>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="10"
+                step="0.5"
+                value={pollutantSlider}
+                onChange={(e) => setPollutantSlider(parseFloat(e.target.value))}
+                className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-red-500"
+              />
+              <button
+                onClick={() => {
+                  injectParameters(0, pollutantSlider);
+                  setPollutantSlider(0);
+                }}
+                disabled={pollutantSlider === 0}
+                className="mt-3 w-full px-4 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                Add Pollutants
+              </button>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 mt-4">
+            Shortcuts: <kbd className="px-2 py-1 bg-white/10 rounded">Space</kbd> to step, 
+            <kbd className="px-2 py-1 bg-white/10 rounded ml-2">P</kbd> to play/pause,
+            <kbd className="px-2 py-1 bg-white/10 rounded ml-2">R</kbd> to refresh
+          </p>
+        </div>
+
         {/* Health Status Banner */}
         <div className={`rounded-2xl backdrop-blur-xl bg-gradient-to-r ${
           getHealthStatus() === 'good' ? 'from-emerald-500/20 to-green-500/20 border-emerald-500/30' :

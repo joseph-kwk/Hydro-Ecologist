@@ -45,9 +45,53 @@ export function useSimulationData() {
         }
     }, [fetchData]);
 
+    const resetSimulation = useCallback(async () => {
+        try {
+            await axios.post(`${API_BASE_URL}/simulation/reset`);
+            fetchData();
+        } catch (error) {
+            console.error("Failed to reset simulation:", error);
+        }
+    }, [fetchData]);
+
+    const injectParameters = useCallback(async (nutrient: number, pollutant: number) => {
+        try {
+            await axios.post(`${API_BASE_URL}/simulation/inject?nutrient=${nutrient}&pollutant=${pollutant}`);
+            fetchData();
+        } catch (error) {
+            console.error("Failed to inject parameters:", error);
+        }
+    }, [fetchData]);
+
+    const exportData = useCallback(() => {
+        if (chemistry) {
+            const data = {
+                timestamp: new Date().toISOString(),
+                health,
+                chemistry,
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `hydro-ecologist-${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    }, [chemistry, health]);
+
     useEffect(() => {
         fetchData();
     }, [fetchData]);
 
-    return { health, chemistry, lastUpdated, stepSimulation, fetchData };
+    return { 
+        health, 
+        chemistry, 
+        lastUpdated, 
+        stepSimulation, 
+        fetchData, 
+        resetSimulation, 
+        injectParameters, 
+        exportData 
+    };
 }
