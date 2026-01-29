@@ -1,0 +1,10 @@
+# Minimal runtime deps (compatible with Python 3.13)
+fastapi>=0.110,<1
+uvicorn[standard]>=0.27,<1
+numpy>=2.2,<3
+
+# Optional (enable later as needed)
+# scipy>=1.14,<2
+# pandas>=2.2,<3
+# scikit-learn>=1.5,<2
+# geopandas>=1,<2
