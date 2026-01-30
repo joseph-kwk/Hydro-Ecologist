@@ -15,9 +15,19 @@ interface ChemistryData {
     bod: number;
 }
 
+// Spatial grid data structure
+interface SpatialGridData {
+    grid: number[][];
+    min: number;
+    max: number;
+    nx: number;
+    ny: number;
+}
+
 export function useSimulationData() {
     const [health, setHealth] = useState<string>('');
     const [chemistry, setChemistry] = useState<ChemistryData | null>(null);
+    const [spatialGrid, setSpatialGrid] = useState<SpatialGridData | null>(null);
     const [lastUpdated, setLastUpdated] = useState(new Date());
 
     const fetchData = useCallback(async () => {
@@ -63,12 +73,24 @@ export function useSimulationData() {
         }
     }, [fetchData]);
 
+    const fetchSpatialGrid = useCallback(async (parameter: string = 'dissolved_oxygen', downsample: number = 4) => {
+        try {
+            const response = await axios.get<SpatialGridData>(
+                `${API_BASE_URL}/status/chemistry/grid?parameter=${parameter}&downsample=${downsample}`
+            );
+            setSpatialGrid(response.data);
+        } catch (error) {
+            console.error("Failed to fetch spatial grid:", error);
+        }
+    }, []);
+
     const exportData = useCallback(() => {
         if (chemistry) {
             const data = {
                 timestamp: new Date().toISOString(),
                 health,
                 chemistry,
+                spatialGrid,
             };
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -78,7 +100,7 @@ export function useSimulationData() {
             a.click();
             URL.revokeObjectURL(url);
         }
-    }, [chemistry, health]);
+    }, [chemistry, health, spatialGrid]);
 
     useEffect(() => {
         fetchData();
@@ -87,9 +109,11 @@ export function useSimulationData() {
     return { 
         health, 
         chemistry, 
+        spatialGrid,
         lastUpdated, 
         stepSimulation, 
         fetchData, 
+        fetchSpatialGrid,
         resetSimulation, 
         injectParameters, 
         exportData 

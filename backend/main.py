@@ -125,17 +125,17 @@ def get_chemistry_parameters():
     return chemistry_solver.get_mean_parameters()
 
 @app.get("/status/chemistry/grid", tags=["Status"])
-def get_chemistry_grid(parameter: str = "nutrient", downsample: int = 10):
+def get_chemistry_grid(parameter: str = "dissolved_oxygen", downsample: int = 4):
     """
     Retrieves full spatial grid for a specific parameter.
     
     Args:
         parameter: One of [nutrient, phytoplankton, zooplankton, detritus, 
                           dissolved_oxygen, ph, bod, temperature]
-        downsample: Factor to reduce grid size (10 = 10x10 output)
+        downsample: Factor to reduce grid size (4 = 25x25 output from 100x100)
     
     Returns:
-        Downsampled 2D grid as nested list
+        Downsampled 2D grid as nested list with nx, ny dimensions
     """
     grid = chemistry_solver.get_parameter(parameter)
     
@@ -147,7 +147,8 @@ def get_chemistry_grid(parameter: str = "nutrient", downsample: int = 10):
     return {
         "parameter": parameter,
         "grid": grid.tolist(),
-        "shape": grid.shape,
+        "nx": int(grid.shape[1]),  # width
+        "ny": int(grid.shape[0]),  # height
         "min": float(grid.min()),
         "max": float(grid.max()),
         "mean": float(grid.mean())

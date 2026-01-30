@@ -1,8 +1,9 @@
 // src/components/Dashboard.tsx
 import React, { useEffect } from 'react';
-import { Activity, Droplet, Wind, AlertTriangle, TrendingUp, Play, Pause, RotateCcw, Download, Beaker } from 'lucide-react';
+import { Activity, Droplet, Wind, AlertTriangle, TrendingUp, Play, Pause, RotateCcw, Download, Beaker, Map } from 'lucide-react';
 import { useSimulationData } from '../hooks/useSimulationData';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import SpatialVisualization from './SpatialVisualization';
 
 interface MetricCardProps {
   title: string;
@@ -45,21 +46,33 @@ const MetricCard: React.FC<MetricCardProps> = ({ title, value, unit = '', icon, 
 };
 
 export default function Dashboard() {
-  const { health, chemistry, stepSimulation, fetchData, resetSimulation, injectParameters, exportData } = useSimulationData();
+  const { health, chemistry, spatialGrid, stepSimulation, fetchData, fetchSpatialGrid, resetSimulation, injectParameters, exportData } = useSimulationData();
   const [history, setHistory] = React.useState<any[]>([]);
   const [isAutoPlay, setIsAutoPlay] = React.useState(false);
   const [nutrientSlider, setNutrientSlider] = React.useState(0);
   const [pollutantSlider, setPollutantSlider] = React.useState(0);
+  const [showSpatialView, setShowSpatialView] = React.useState(false);
+  const [spatialParameter, setSpatialParameter] = React.useState('dissolved_oxygen');
 
   // Auto-play functionality
   useEffect(() => {
     if (isAutoPlay) {
       const interval = setInterval(() => {
         stepSimulation();
+        if (showSpatialView) {
+          fetchSpatialGrid(spatialParameter, 4);
+        }
       }, 2000);
       return () => clearInterval(interval);
     }
-  }, [isAutoPlay, stepSimulation]);
+  }, [isAutoPlay, stepSimulation, showSpatialView, spatialParameter, fetchSpatialGrid]);
+
+  // Load spatial grid when parameter changes
+  useEffect(() => {
+    if (showSpatialView) {
+      fetchSpatialGrid(spatialParameter, 4);
+    }
+  }, [spatialParameter, showSpatialView, fetchSpatialGrid]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -147,6 +160,18 @@ export default function Dashboard() {
                 title="Export data"
               >
                 <Download className="w-5 h-5 text-gray-400" />
+              </button>
+              <button
+                onClick={() => {
+                  setShowSpatialView(!showSpatialView);
+                  if (!showSpatialView) {
+                    fetchSpatialGrid(spatialParameter, 4);
+                  }
+                }}
+                className={`px-6 py-3 rounded-xl ${showSpatialView ? 'bg-cyan-500/20 border-cyan-500/30' : 'bg-white/5 border-white/10'} border backdrop-blur-xl transition-all duration-300 hover:scale-105`}
+                title="Toggle spatial view"
+              >
+                <Map className={`w-5 h-5 ${showSpatialView ? 'text-cyan-400' : 'text-gray-400'}`} />
               </button>
             </div>
           </div>
