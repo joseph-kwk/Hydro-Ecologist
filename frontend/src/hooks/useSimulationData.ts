@@ -13,6 +13,7 @@ interface ChemistryData {
     dissolved_oxygen: number;
     ph: number;
     bod: number;
+    temperature: number;
 }
 
 // Spatial grid data structure
@@ -83,6 +84,15 @@ export function useSimulationData() {
             console.error("Failed to fetch spatial grid:", error);
         }
     }, []);
+    
+    const toggleMarineHeatwave = useCallback(async (activate: boolean, intensity: number = 3.5) => {
+        try {
+            await axios.post(`${API_BASE_URL}/simulation/heatwave?activate=${activate}&intensity=${intensity}`);
+            fetchData();
+        } catch (error) {
+            console.error("Failed to toggle marine heatwave:", error);
+        }
+    }, [fetchData]);
 
     const exportData = useCallback(() => {
         if (chemistry) {
@@ -115,7 +125,8 @@ export function useSimulationData() {
         fetchData, 
         fetchSpatialGrid,
         resetSimulation, 
-        injectParameters, 
+        injectParameters,
+        toggleMarineHeatwave,
         exportData 
     };
 }

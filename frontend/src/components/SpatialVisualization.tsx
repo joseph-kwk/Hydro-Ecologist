@@ -41,6 +41,12 @@ const parameterInfo: Record<string, { label: string; icon: React.ReactNode; unit
         unit: 'mg/L',
         colormap: 'pollutant', // low = blue, high = red/brown
     },
+    temperature: {
+        label: 'Temperature',
+        icon: <Activity className="w-5 h-5" />,
+        unit: '°C',
+        colormap: 'temperature', // low = blue, high = red
+    },
 };
 
 function getColor(value: number, min: number, max: number, colormap: string): string {
@@ -83,6 +89,28 @@ function getColor(value: number, min: number, max: number, colormap: string): st
             const pg = Math.floor(100 - normalized * 50);
             const pb = Math.floor(150 - normalized * 120);
             return `rgb(${pr}, ${pg}, ${pb})`;
+        
+        case 'temperature':
+            // Blue (cold) -> Green (moderate) -> Orange (warm) -> Red (hot)
+            if (normalized < 0.33) {
+                const t = normalized / 0.33;
+                const r = Math.floor(50 + t * 50);
+                const g = Math.floor(100 + t * 120);
+                const b = Math.floor(200 - t * 50);
+                return `rgb(${r}, ${g}, ${b})`;
+            } else if (normalized < 0.67) {
+                const t = (normalized - 0.33) / 0.34;
+                const r = Math.floor(100 + t * 120);
+                const g = Math.floor(220 - t * 40);
+                const b = Math.floor(150 - t * 100);
+                return `rgb(${r}, ${g}, ${b})`;
+            } else {
+                const t = (normalized - 0.67) / 0.33;
+                const r = Math.floor(220 + t * 30);
+                const g = Math.floor(180 - t * 130);
+                const b = Math.floor(50 - t * 30);
+                return `rgb(${r}, ${g}, ${b})`;
+            }
         
         default:
             // Viridis-like: Purple -> Blue -> Green -> Yellow
@@ -159,7 +187,9 @@ export default function SpatialVisualization({ spatialGrid, parameter, onParamet
                         </button>
                     ))}
                 </div>
-            </div>
+            </div>info.colormap === 'temperature'
+                                ? 'rgb(50,100,200), rgb(100,220,150), rgb(220,180,50), rgb(250,50,20)'
+                                : 
 
             <div className="relative bg-slate-950/50 rounded-xl p-4 border border-white/5">
                 <canvas

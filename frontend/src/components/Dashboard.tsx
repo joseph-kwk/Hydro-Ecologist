@@ -46,13 +46,15 @@ const MetricCard: React.FC<MetricCardProps> = ({ title, value, unit = '', icon, 
 };
 
 export default function Dashboard() {
-  const { health, chemistry, spatialGrid, stepSimulation, fetchData, fetchSpatialGrid, resetSimulation, injectParameters, exportData } = useSimulationData();
+  const { health, chemistry, spatialGrid, stepSimulation, fetchData, fetchSpatialGrid, resetSimulation, injectParameters, toggleMarineHeatwave, exportData } = useSimulationData();
   const [history, setHistory] = React.useState<any[]>([]);
   const [isAutoPlay, setIsAutoPlay] = React.useState(false);
   const [nutrientSlider, setNutrientSlider] = React.useState(0);
   const [pollutantSlider, setPollutantSlider] = React.useState(0);
   const [showSpatialView, setShowSpatialView] = React.useState(false);
   const [spatialParameter, setSpatialParameter] = React.useState('dissolved_oxygen');
+  const [heatwaveActive, setHeatwaveActive] = React.useState(false);
+  const [heatwaveIntensity, setHeatwaveIntensity] = React.useState(3.5);
 
   // Auto-play functionality
   useEffect(() => {
@@ -313,8 +315,64 @@ export default function Dashboard() {
               icon={<Droplet className="w-6 h-6 text-purple-400" />}
               status={chemistry.ph < 7.5 || chemistry.ph > 8.5 ? 'warning' : 'good'}
             />
+            <MetricCard
+              title="Temperature"
+              value={chemistry.temperature}
+              unit="°C"
+              icon={<Activity className="w-6 h-6 text-orange-400" />}
+              status={chemistry.temperature > 25 ? 'warning' : chemistry.temperature > 28 ? 'critical' : 'good'}
+            />
           </div>
         )}
+
+        {/* Marine Heatwave Controls */}
+        <div className="rounded-2xl backdrop-blur-xl bg-white/5 border border-white/10 p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Activity className="w-6 h-6 text-orange-400" />
+            <h3 className="text-lg font-semibold text-white">🌡️ Marine Heatwave Scenario</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="flex items-center justify-between text-sm text-gray-300 mb-2">
+                <span>Intensity</span>
+                <span className="text-orange-400">+{heatwaveIntensity.toFixed(1)} °C</span>
+              </label>
+              <input
+                type="range"
+                min="1"
+                max="7"
+                step="0.5"
+                value={heatwaveIntensity}
+                onChange={(e) => setHeatwaveIntensity(parseFloat(e.target.value))}
+                className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-orange-500"
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                Typical marine heatwaves: +3-5°C for 7-21 days
+              </p>
+            </div>
+            <div className="flex flex-col justify-center">
+              <button
+                onClick={() => {
+                  const newState = !heatwaveActive;
+                  toggleMarineHeatwave(newState, heatwaveIntensity);
+                  setHeatwaveActive(newState);
+                }}
+                className={`w-full px-4 py-3 rounded-lg ${
+                  heatwaveActive
+                    ? 'bg-orange-500/30 hover:bg-orange-500/40 border-orange-500/50'
+                    : 'bg-white/5 hover:bg-white/10 border-white/10'
+                } border font-semibold transition-all`}
+              >
+                {heatwaveActive ? '🔥 Heatwave ACTIVE' : 'Activate Heatwave'}
+              </button>
+              <p className="text-xs text-gray-400 mt-2 text-center">
+                {heatwaveActive 
+                  ? 'Causing reduced DO saturation & ecosystem stress' 
+                  : 'Simulates prolonged temperature anomaly'}
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* Charts */}
         {history.length > 1 && (

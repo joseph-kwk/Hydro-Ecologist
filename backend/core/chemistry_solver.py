@@ -46,6 +46,14 @@ class ChemistrySolver:
         
         # Physical transport coefficients
         self.diffusivity = 1.0  # m²/s (turbulent diffusion)
+        self.thermal_diffusivity = 1.2  # m²/s (heat diffusion, slightly higher)
+        
+        # Temperature dynamics parameters (Phase 2)
+        self.solar_heating_rate = 0.0001  # °C/s at solar noon
+        self.atmospheric_cooling_rate = 0.00002  # °C/s (radiative + evaporative)
+        self.heatwave_active = False
+        self.heatwave_intensity = 0.0  # °C anomaly
+        self.simulation_time = 0.0  # seconds (for day/night cycle)
         
         print(f"Chemistry Engine Initialized: Spatial NPZD on {self.nx}x{self.ny} grid")
 
@@ -60,6 +68,9 @@ class ChemistrySolver:
             velocity_v: v-velocity field (nx, ny) in m/s (from physics solver)
         """
         dt_days = delta_time / 86400.0  # Convert seconds to days for biological rates
+        
+        # --- 0. TEMPERATURE DYNAMICS (Phase 2) ---
+        self._update_temperature(delta_time, velocity_u, velocity_v)
         
         # --- 1. BIOLOGICAL REACTIONS (local, no transport) ---
         self._update_npzd_reactions(dt_days)
@@ -76,6 +87,9 @@ class ChemistrySolver:
         
         # Clamp all values to physical bounds
         self._clamp_parameters()
+        
+        # Increment simulation time for day/night cycle
+        self.simulation_time += delta_time
 
     def _update_npzd_reactions(self, dt_days: float):
         """
@@ -189,20 +203,70 @@ class ChemistrySolver:
 
     def _update_oxygen(self, dt_days: float):
         """
-        Update dissolved oxygen based on respiration and photosynthesis.
+        Update dissolved oxygen based on respiration, photosynthesis, and temperature-dependent solubility.
+        Phase 2: DO saturation decreases with temperature!
         """
         P = self.phytoplankton
         Z = self.zooplankton
         D = self.detritus
         
+        # Oxygen production from photosynthesis (light-dependent, simplified)
+        photosynthesis_O2 = P * 0.12 * dt_days
+        
         # Respiration consumes oxygen
         respiration = (P * 0.1 + Z * 0.15 + D * 0.05) * self.bod
-        self.dissolved_oxygen -= respiration * dt_days
+        self.dissolved_oxygen += photosynthesis_O2 - respiration * dt_days
         
-        # Photosynthesis produces oxygen (proportional to phyto growth)
-        # Rough estimate: 1 µmol phyto growth → 1 mg/L O₂
-        photosynthesis = P * 0.2  # Simplified
-        self.dissolved_oxygen += photosynthesis * dt_days
+        # Temperature-dependent DO saturation (Phase 2 critical!)
+        # DO_sat(T) = 14.6 - 0.41*(T - 10) mg/L (empirical freshwater formula)
+        DO_saturation = 14.6 - 0.41 * (self.temperature - 10.0)
+        DO_saturation = np.clip(DO_saturation, 4.0, 16.0)  # Physical bounds
+        
+        # Gas exchange with atmosphere (re-aeration)
+        # If DO < DO_sat, water absorbs O2; if DO > DO_sat, water releases O2
+        k_reaeration = 0.1  # day⁻¹ (reaeration coefficient)
+        reaeration = k_reaeration * (DO_saturation - self.dissolved_oxygen) * dt_days
+        self.dissolved_oxygen += reaeration
+
+    def _update_temperature(self, dt: float, velocity_u: Optional[np.ndarray] = None,
+                           velocity_v: Optional[np.ndarray] = None):
+        """
+        Update temperature field with solar heating, cooling, advection, and diffusion.
+        Phase 2: Implements day/night cycle and marine heatwave scenarios.
+        
+        ∂T/∂t = Q_solar + Q_atm + κ_T·∇²T - u·∇T
+        """
+        # Day/night cycle (24-hour period = 86400 seconds)
+        hour_of_day = (self.simulation_time % 86400) / 3600.0  # 0-24 hours
+        solar_factor = np.maximum(0, np.sin(np.pi * (hour_of_day - 6) / 12))  # Peak at noon
+        
+        # Solar heating (spatially uniform for now, could add spatial variation)
+        Q_solar = self.solar_heating_rate * solar_factor
+        
+        # Atmospheric cooling (radiative + evaporative)
+        Q_atm = -self.atmospheric_cooling_rate
+        
+        # Marine heatwave anomaly (if active)
+        if self.heatwave_active:
+            Q_solar += self.heatwave_intensity / 86400.0  # Convert °C/day to °C/s
+        
+        # Apply heating/cooling
+        self.temperature += (Q_solar + Q_atm) * dt
+        
+        # Advection of heat (if velocity provided)
+        if velocity_u is not None and velocity_v is not None:
+            self._advect_tracer(self.temperature, velocity_u, velocity_v, dt)
+        
+        # Thermal diffusion (heat spreads faster than dissolved chemicals)
+        laplacian = (
+            np.roll(self.temperature, 1, axis=0) + np.roll(self.temperature, -1, axis=0) +
+            np.roll(self.temperature, 1, axis=1) + np.roll(self.temperature, -1, axis=1) - 
+            4 * self.temperature
+        ) / (self.dx ** 2)
+        self.temperature += self.thermal_diffusivity * laplacian * dt
+        
+        # Clamp temperature to realistic bounds
+        self.temperature = np.clip(self.temperature, 0.0, 40.0)
 
     def _clamp_parameters(self):
         """
@@ -215,6 +279,7 @@ class ChemistrySolver:
         self.dissolved_oxygen = np.clip(self.dissolved_oxygen, 0, 20)
         self.ph = np.clip(self.ph, 6.0, 9.5)
         self.bod = np.clip(self.bod, 0, 50)
+        self.temperature = np.clip(self.temperature, 0.0, 40.0)
 
     def inject_nutrient(self, x: int, y: int, radius: int, amount: float):
         """
@@ -302,3 +367,39 @@ class ChemistrySolver:
             Fraction (0.0 to 1.0)
         """
         return float(np.sum(self.dissolved_oxygen < 2.0) / (self.nx * self.ny))
+    
+    def activate_marine_heatwave(self, intensity: float = 3.0):
+        """
+        Activate marine heatwave scenario.
+        
+        Args:
+            intensity: Temperature anomaly in °C (typically 3-5°C)
+        """
+        self.heatwave_active = True
+        self.heatwave_intensity = intensity
+        print(f"🌡️ Marine Heatwave ACTIVATED: +{intensity}°C anomaly")
+    
+    def deactivate_marine_heatwave(self):
+        """
+        Deactivate marine heatwave scenario.
+        """
+        self.heatwave_active = False
+        self.heatwave_intensity = 0.0
+        print("🌡️ Marine Heatwave deactivated")
+    
+    def inject_temperature(self, x: int, y: int, radius: int, delta_temp: float):
+        """
+        Inject localized temperature anomaly (e.g., thermal discharge, upwelling).
+        
+        Args:
+            x, y: Grid coordinates
+            radius: Injection radius in grid cells
+            delta_temp: Temperature change in °C
+        """
+        for i in range(max(0, x - radius), min(self.nx, x + radius + 1)):
+            for j in range(max(0, y - radius), min(self.ny, y + radius + 1)):
+                dist = np.sqrt((i - x)**2 + (j - y)**2)
+                if dist <= radius:
+                    # Gaussian profile
+                    weight = np.exp(-dist**2 / (2 * (radius / 3)**2))
+                    self.temperature[i, j] += delta_temp * weight

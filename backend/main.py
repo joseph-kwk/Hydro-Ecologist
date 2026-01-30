@@ -178,6 +178,34 @@ def get_flow_at_point(x: int = 50, y: int = 50):
     flow_vector = physics_solver.get_flow_vector(x, y)
     return {"x": x, "y": y, "flow_u": flow_vector[0], "flow_v": flow_vector[1]}
 
+@app.post("/simulation/heatwave", tags=["Scenarios"])
+def toggle_marine_heatwave(activate: bool = True, intensity: float = 3.5):
+    """
+    Activate or deactivate marine heatwave scenario.
+    
+    Args:
+        activate: True to start heatwave, False to stop
+        intensity: Temperature anomaly in °C (3-5°C typical for marine heatwaves)
+    
+    Marine heatwaves cause:
+    - Reduced DO solubility (warmer water holds less oxygen)
+    - Increased metabolic rates (faster biological processes)
+    - Potential ecosystem stress and mortality
+    """
+    if activate:
+        chemistry_solver.activate_marine_heatwave(intensity)
+        return {
+            "message": f"Marine heatwave activated: +{intensity}°C anomaly",
+            "impact": "Reduced DO saturation, increased metabolism",
+            "status": "active"
+        }
+    else:
+        chemistry_solver.deactivate_marine_heatwave()
+        return {
+            "message": "Marine heatwave deactivated",
+            "status": "inactive"
+        }
+
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the Hydro-Ecologist Backend. See /docs for API details."}
