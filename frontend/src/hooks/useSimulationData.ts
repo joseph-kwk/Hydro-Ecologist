@@ -25,6 +25,26 @@ interface SpatialGridData {
     ny: number;
 }
 
+// Regulatory compliance data
+interface RegulatoryCompliance {
+    compliant: boolean;
+    violations: Array<{
+        parameter: string;
+        value: number;
+        threshold: number | string;
+        severity: string;
+    }>;
+    impairment_category: string;
+    consecutive_violations: number;
+    tmdl_status: Array<{
+        parameter: string;
+        current_load: number;
+        tmdl_limit: number;
+        compliance: boolean;
+        reduction_needed: number;
+    }>;
+}
+
 export function useSimulationData() {
     const [health, setHealth] = useState<string>('');
     const [chemistry, setChemistry] = useState<ChemistryData | null>(null);
@@ -93,6 +113,48 @@ export function useSimulationData() {
             console.error("Failed to toggle marine heatwave:", error);
         }
     }, [fetchData]);
+    
+    const deployRemediation = useCallback(async (x: number, y: number, radius: number, type: string, intensity: number = 1.0) => {
+        try {
+            await axios.post(`${API_BASE_URL}/remediation/deploy`, null, {
+                params: { x, y, radius, intervention_type: type, intensity }
+            });
+            return true;
+        } catch (error) {
+            console.error("Failed to deploy remediation:", error);
+            return false;
+        }
+    }, []);
+    
+    const getRemediationSummary = useCallback(async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/remediation/summary`);
+            return response.data;
+        } catch (error) {
+            console.error("Failed to fetch remediation summary:", error);
+            return null;
+        }
+    }, []);
+    
+    const getRegulatoryCompliance = useCallback(async () => {
+        try {
+            const response = await axios.get<RegulatoryCompliance>(`${API_BASE_URL}/regulatory/compliance`);
+            return response.data;
+        } catch (error) {
+            console.error("Failed to fetch regulatory compliance:", error);
+            return null;
+        }
+    }, []);
+    
+    const getRegulatoryHistory = useCallback(async () => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/regulatory/summary`);
+            return response.data;
+        } catch (error) {
+            console.error("Failed to fetch regulatory history:", error);
+            return null;
+        }
+    }, []);
 
     const exportData = useCallback(() => {
         if (chemistry) {
@@ -127,6 +189,10 @@ export function useSimulationData() {
         resetSimulation, 
         injectParameters,
         toggleMarineHeatwave,
+        deployRemediation,
+        getRemediationSummary,
+        getRegulatoryCompliance,
+        getRegulatoryHistory,
         exportData 
     };
 }

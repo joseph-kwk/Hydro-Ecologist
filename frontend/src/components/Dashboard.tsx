@@ -46,7 +46,7 @@ const MetricCard: React.FC<MetricCardProps> = ({ title, value, unit = '', icon, 
 };
 
 export default function Dashboard() {
-  const { health, chemistry, spatialGrid, stepSimulation, fetchData, fetchSpatialGrid, resetSimulation, injectParameters, toggleMarineHeatwave, exportData } = useSimulationData();
+  const { health, chemistry, spatialGrid, stepSimulation, fetchData, fetchSpatialGrid, resetSimulation, injectParameters, toggleMarineHeatwave, deployRemediation, getRemediationSummary, getRegulatoryCompliance, getRegulatoryHistory, exportData } = useSimulationData();
   const [history, setHistory] = React.useState<any[]>([]);
   const [isAutoPlay, setIsAutoPlay] = React.useState(false);
   const [nutrientSlider, setNutrientSlider] = React.useState(0);
@@ -55,19 +55,26 @@ export default function Dashboard() {
   const [spatialParameter, setSpatialParameter] = React.useState('dissolved_oxygen');
   const [heatwaveActive, setHeatwaveActive] = React.useState(false);
   const [heatwaveIntensity, setHeatwaveIntensity] = React.useState(3.5);
+  const [remediationType, setRemediationType] = React.useState('aeration');
+  const [remediationRadius, setRemediationRadius] = React.useState(10);
+  const [remediationSummary, setRemediationSummary] = React.useState<any>(null);
+  const [regulatoryCompliance, setRegulatoryCompliance] = React.useState<any>(null);
 
   // Auto-play functionality
   useEffect(() => {
     if (isAutoPlay) {
-      const interval = setInterval(() => {
+      const interval = setInterval(async () => {
         stepSimulation();
         if (showSpatialView) {
           fetchSpatialGrid(spatialParameter, 4);
         }
+        // Update regulatory compliance
+        const compliance = await getRegulatoryCompliance();
+        setRegulatoryCompliance(compliance);
       }, 2000);
       return () => clearInterval(interval);
     }
-  }, [isAutoPlay, stepSimulation, showSpatialView, spatialParameter, fetchSpatialGrid]);
+  }, [isAutoPlay, stepSimulation, showSpatialView, spatialParameter, fetchSpatialGrid, getRegulatoryCompliance]);
 
   // Load spatial grid when parameter changes
   useEffect(() => {
@@ -372,6 +379,201 @@ export default function Dashboard() {
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Remediation Toolkit */}
+        <div className="rounded-2xl backdrop-blur-xl bg-white/5 border border-white/10 p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <h3 className="text-lg font-semibold text-white">🧪 Remediation Toolkit</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Intervention Type Selector */}
+            <div className="space-y-2">
+              <label className="text-sm text-gray-400">Intervention Type</label>
+              <select
+                value={remediationType}
+                onChange={(e) => setRemediationType(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                <option value="aeration">💨 Aeration (DO Boost)</option>
+                <option value="wetland">🌿 Constructed Wetland</option>
+                <option value="oyster_reef">🦪 Oyster Reef</option>
+              </select>
+              <div className="text-xs text-gray-500 mt-1">
+                {remediationType === 'aeration' && 'Mechanical oxygenation +2 mg/L/day'}
+                {remediationType === 'wetland' && 'Nutrient removal -30%/day'}
+                {remediationType === 'oyster_reef' && 'Natural filtration -20% phyto/day'}
+              </div>
+            </div>
+
+            {/* Coverage Radius */}
+            <div className="space-y-2">
+              <label className="flex justify-between text-sm text-gray-400">
+                <span>Coverage Radius</span>
+                <span className="text-green-400">{remediationRadius} cells</span>
+              </label>
+              <input
+                type="range"
+                min="5"
+                max="20"
+                step="1"
+                value={remediationRadius}
+                onChange={(e) => setRemediationRadius(parseInt(e.target.value))}
+                className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-green-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Area: ~{Math.round(Math.PI * remediationRadius * remediationRadius)} cells
+              </p>
+            </div>
+
+            {/* Deploy Button & Cost */}
+            <div className="flex flex-col justify-center gap-2">
+              <button
+                onClick={async () => {
+                  const success = await deployRemediation(50, 50, remediationRadius, remediationType);
+                  if (success) {
+                    const summary = await getRemediationSummary();
+                    setRemediationSummary(summary);
+                  }
+                }}
+                className="w-full px-4 py-2 rounded-lg font-semibold transition-all bg-green-500/20 hover:bg-green-500/30 border-green-500/50 border"
+              >
+                Deploy at Center
+              </button>
+              {remediationSummary && (
+                <div className="text-xs text-gray-400 space-y-1">
+                  <div className="flex justify-between">
+                    <span>Capital:</span>
+                    <span className="text-yellow-400">${(remediationSummary.total_capital_cost / 1000).toFixed(1)}k</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Daily Op:</span>
+                    <span className="text-orange-400">${remediationSummary.daily_operational_cost.toFixed(0)}/day</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="mt-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+            <p className="text-xs text-gray-400 leading-relaxed">
+              <strong className="text-blue-400">Phase 3:</strong> Deploy interventions to improve water quality. 
+              Aeration boosts DO, wetlands remove nutrients/BOD, oyster reefs filter phytoplankton. 
+              Effects decay over time - monitor effectiveness!
+            </p>
+          </div>
+        </div>
+
+        {/* Regulatory Compliance Monitor */}
+        <div className="rounded-2xl backdrop-blur-xl bg-white/5 border border-white/10 p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <h3 className="text-lg font-semibold text-white">⚖️ Regulatory Compliance</h3>
+            <button
+              onClick={async () => {
+                const compliance = await getRegulatoryCompliance();
+                setRegulatoryCompliance(compliance);
+              }}
+              className="ml-auto px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs transition-all"
+            >
+              Check Status
+            </button>
+          </div>
+          
+          {regulatoryCompliance ? (
+            <div className="space-y-4">
+              {/* Overall Status */}
+              <div className={`p-4 rounded-lg border-2 ${
+                regulatoryCompliance.compliant 
+                  ? 'bg-green-500/10 border-green-500/30' 
+                  : 'bg-red-500/10 border-red-500/30'
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold text-white">
+                    {regulatoryCompliance.compliant ? '✓ COMPLIANT' : '⚠ VIOLATIONS DETECTED'}
+                  </span>
+                  <span className={`text-sm font-mono ${
+                    regulatoryCompliance.impairment_category === 'none' ? 'text-green-400' :
+                    regulatoryCompliance.impairment_category === 'threatened' ? 'text-yellow-400' :
+                    regulatoryCompliance.impairment_category === 'impaired' ? 'text-orange-400' :
+                    'text-red-400'
+                  }`}>
+                    {regulatoryCompliance.impairment_category.toUpperCase().replace('_', ' ')}
+                  </span>
+                </div>
+                {regulatoryCompliance.consecutive_violations > 0 && (
+                  <p className="text-xs text-gray-400">
+                    Consecutive violations: {regulatoryCompliance.consecutive_violations} steps
+                  </p>
+                )}
+              </div>
+
+              {/* Active Violations */}
+              {regulatoryCompliance.violations && regulatoryCompliance.violations.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-red-400">Current Violations:</h4>
+                  {regulatoryCompliance.violations.map((v: any, idx: number) => (
+                    <div key={idx} className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="text-white font-semibold">{v.parameter.replace('_', ' ').toUpperCase()}</span>
+                          <span className={`ml-2 px-2 py-0.5 rounded text-xs ${
+                            v.severity === 'critical' ? 'bg-red-500/30 text-red-300' :
+                            v.severity === 'major' ? 'bg-orange-500/30 text-orange-300' :
+                            'bg-yellow-500/30 text-yellow-300'
+                          }`}>
+                            {v.severity}
+                          </span>
+                        </div>
+                        <div className="text-right text-xs">
+                          <div className="text-white">{v.value.toFixed(2)}</div>
+                          <div className="text-gray-400">Limit: {typeof v.threshold === 'number' ? v.threshold.toFixed(2) : v.threshold}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* TMDL Status */}
+              {regulatoryCompliance.tmdl_status && regulatoryCompliance.tmdl_status.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-blue-400">TMDL Compliance:</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {regulatoryCompliance.tmdl_status.map((tmdl: any, idx: number) => (
+                      <div key={idx} className={`p-3 rounded-lg ${
+                        tmdl.compliance ? 'bg-green-500/10 border border-green-500/20' : 'bg-orange-500/10 border border-orange-500/20'
+                      }`}>
+                        <div className="text-xs text-gray-400 mb-1">{tmdl.parameter.toUpperCase()}</div>
+                        <div className="text-sm text-white font-semibold">
+                          {tmdl.compliance ? '✓ Within Limit' : `${tmdl.reduction_needed}% Reduction Needed`}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-1">
+                          {tmdl.current_load.toFixed(1)} / {tmdl.tmdl_limit.toFixed(1)} limit
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Standards Reference */}
+              {regulatoryCompliance.standards && (
+                <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                  <p className="text-xs text-gray-400 leading-relaxed">
+                    <strong className="text-blue-400">Phase 4:</strong> EPA 303(d) and TMDL monitoring. 
+                    Waterbody type: <span className="text-white">{regulatoryCompliance.waterbody_type}</span>. 
+                    Standards: DO ≥{regulatoryCompliance.standards.do_minimum} mg/L, 
+                    Temp ≤{regulatoryCompliance.standards.temp_maximum}°C, 
+                    Nutrients ≤{regulatoryCompliance.standards.nutrient_eutrophic} µmol/L.
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-400">
+              <p>Click "Check Status" to assess regulatory compliance</p>
+              <p className="text-xs mt-2">EPA 303(d) Impaired Waters & TMDL Monitoring</p>
+            </div>
+          )}
         </div>
 
         {/* Charts */}

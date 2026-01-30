@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from .core.physics_solver import PhysicsSolver
 from .core.chemistry_solver import ChemistrySolver
 from .core.biology_solver import BiologySolver
+from .core.remediation_manager import RemediationManager, RemediationType
+from .core.regulatory_monitor import RegulatoryMonitor
 
 app = FastAPI(
     title="Hydro-Ecologist API",
@@ -26,6 +28,8 @@ app.add_middleware(
 physics_solver = PhysicsSolver(grid_shape=(100, 100), domain_size=(200.0, 200.0))
 chemistry_solver = ChemistrySolver(grid_shape=(100, 100), domain_size=(200.0, 200.0))
 biology_solver = BiologySolver()
+remediation_manager = RemediationManager(grid_shape=(100, 100))
+regulatory_monitor = RegulatoryMonitor(waterbody_type="warm_water_fishery")
 
 # --- Main Simulation Loop with Physics-Chemistry Coupling ---
 def run_simulation_step():
@@ -43,11 +47,17 @@ def run_simulation_step():
     # Get velocity field for chemistry advection
     velocity_u, velocity_v = physics_solver.get_velocity_field()
     
+    # Apply remediation interventions (Phase 3)
+    remediation_manager.apply_remediations(chemistry_solver, delta_time)
+    
     # Update chemistry with advection
     chemistry_solver.update(delta_time, velocity_u, velocity_v)
     
     # Update biology based on chemistry
     biology_solver.update(chemistry_solver, delta_time)
+    
+    # Assess regulatory compliance (Phase 4)
+    regulatory_monitor.assess_compliance(chemistry_solver.get_mean_parameters())
 
 @app.post("/simulation/step", tags=["Simulation"])
 def trigger_simulation_step():
@@ -59,13 +69,13 @@ def trigger_simulation_step():
 
 @app.post("/simulation/reset", tags=["Simulation"])
 def reset_simulation():
-    """
-    Resets the simulation to pristine initial state.
-    """
-    global physics_solver, chemistry_solver, biology_solver
+    # Resets all simulation components to initial state
+    global physics_solver, chemistry_solver, biology_solver, remediation_manager, regulatory_monitor
     physics_solver = PhysicsSolver(grid_shape=(100, 100), domain_size=(200.0, 200.0))
     chemistry_solver = ChemistrySolver(grid_shape=(100, 100), domain_size=(200.0, 200.0))
     biology_solver = BiologySolver()
+    remediation_manager = RemediationManager(grid_shape=(100, 100))
+    regulatory_monitor.reset()
     return {"message": "Simulation reset to initial state."}
 
 @app.post("/simulation/inject", tags=["Simulation"])
@@ -126,17 +136,9 @@ def get_chemistry_parameters():
 
 @app.get("/status/chemistry/grid", tags=["Status"])
 def get_chemistry_grid(parameter: str = "dissolved_oxygen", downsample: int = 4):
-    """
-    Retrieves full spatial grid for a specific parameter.
-    
-    Args:
-        parameter: One of [nutrient, phytoplankton, zooplankton, detritus, 
-                          dissolved_oxygen, ph, bod, temperature]
-        downsample: Factor to reduce grid size (4 = 25x25 output from 100x100)
-    
-    Returns:
-        Downsampled 2D grid as nested list with nx, ny dimensions
-    """
+    # Retrieves full spatial grid for a specific parameter
+    # Args: parameter, downsample factor
+    # Returns: Downsampled grid as nested list
     grid = chemistry_solver.get_parameter(parameter)
     
     # Downsample to reduce payload size
@@ -180,22 +182,12 @@ def get_flow_at_point(x: int = 50, y: int = 50):
 
 @app.post("/simulation/heatwave", tags=["Scenarios"])
 def toggle_marine_heatwave(activate: bool = True, intensity: float = 3.5):
-    """
-    Activate or deactivate marine heatwave scenario.
-    
-    Args:
-        activate: True to start heatwave, False to stop
-        intensity: Temperature anomaly in °C (3-5°C typical for marine heatwaves)
-    
-    Marine heatwaves cause:
-    - Reduced DO solubility (warmer water holds less oxygen)
-    - Increased metabolic rates (faster biological processes)
-    - Potential ecosystem stress and mortality
-    """
+    # Activate or deactivate marine heatwave scenario
+    # Args: activate (bool), intensity (float, 3-5C typical)
     if activate:
         chemistry_solver.activate_marine_heatwave(intensity)
         return {
-            "message": f"Marine heatwave activated: +{intensity}°C anomaly",
+            "message": f"Marine heatwave activated: +{intensity}C anomaly",
             "impact": "Reduced DO saturation, increased metabolism",
             "status": "active"
         }
@@ -205,6 +197,90 @@ def toggle_marine_heatwave(activate: bool = True, intensity: float = 3.5):
             "message": "Marine heatwave deactivated",
             "status": "inactive"
         }
+
+@app.post("/remediation/deploy", tags=["Remediation"])
+def deploy_remediation(x: int, y: int, radius: int, 
+                       intervention_type: str = "aeration",
+                       intensity: float = 1.0):
+    """
+    Deploy a remediation intervention at specified location.
+    Phase 3: Water quality restoration toolkit!
+    
+    Args:
+        x, y: Grid coordinates (0-99)
+        radius: Effective radius in grid cells
+        intervention_type: "aeration", "wetland", or "oyster_reef"
+        intensity: Effectiveness (0.0-1.0)
+    
+    Intervention Types:
+    - Aeration: Mechanical DO injection (+2 mg/L per day)
+    - Wetland: Biological nutrient/BOD removal (30-40% per day)
+    - Oyster Reef: Natural filtration (20% phyto removal per day)
+    """
+    try:
+        rem_type = RemediationType(intervention_type)
+        result = remediation_manager.deploy_intervention(
+            x, y, radius, rem_type, intensity
+        )
+        return result
+    except ValueError:
+        return {"error": f"Invalid intervention type: {intervention_type}. Use: aeration, wetland, oyster_reef"}
+
+@app.delete("/remediation/{zone_id}", tags=["Remediation"])
+def remove_remediation(zone_id: int):
+    """
+    Remove/deactivate a remediation intervention.
+    
+    Args:
+        zone_id: ID of intervention to remove
+    """
+    return remediation_manager.remove_intervention(zone_id)
+
+@app.get("/remediation/summary", tags=["Remediation"])
+def get_remediation_summary():
+    """
+    Get summary of all deployed remediation interventions.
+    Includes costs, effectiveness, and locations.
+    """
+    return remediation_manager.get_summary()
+
+@app.get("/regulatory/compliance", tags=["Regulatory"])
+def get_regulatory_compliance():
+    """
+    Get current regulatory compliance status.
+    Phase 4: EPA 303(d) and TMDL monitoring.
+    
+    Returns:
+        Current violations, impairment status, TMDL compliance
+    """
+    chemistry_data = chemistry_solver.get_mean_parameters()
+    return regulatory_monitor.assess_compliance(chemistry_data)
+
+@app.get("/regulatory/summary", tags=["Regulatory"])
+def get_regulatory_summary():
+    """
+    Get historical compliance summary and statistics.
+    
+    Returns:
+        Total violations, violation rate, impairment history
+    """
+    return regulatory_monitor.get_compliance_summary()
+
+@app.post("/regulatory/set_waterbody", tags=["Regulatory"])
+def set_waterbody_type(waterbody_type: str = "warm_water_fishery"):
+    """
+    Set waterbody classification for appropriate standards.
+    
+    Args:
+        waterbody_type: "cold_water_fishery", "warm_water_fishery", 
+                       "estuarine", "coastal"
+    """
+    global regulatory_monitor
+    regulatory_monitor = RegulatoryMonitor(waterbody_type=waterbody_type)
+    return {
+        "message": f"Waterbody type set to: {waterbody_type}",
+        "standards_updated": True
+    }
 
 @app.get("/")
 def read_root():
