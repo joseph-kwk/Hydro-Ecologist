@@ -1,9 +1,12 @@
 # backend/core/biology_solver.py
+import numpy as np
 
 class BiologySolver:
     """
     Manages the ecological feedback, trophic cascades, and mortality logic for
     higher-order species (beyond the NPZD model).
+    
+    Now spatial-aware: uses mean values from spatial chemistry grids.
     """
     def __init__(self):
         # Population counts for key indicator species
@@ -20,19 +23,26 @@ class BiologySolver:
         """
         Updates biological populations based on chemical conditions from the
         chemistry solver, implementing trophic cascade logic.
+        
+        Uses spatial averages from chemistry grids.
         """
+        # Get spatially-averaged parameters
+        mean_DO = float(np.mean(chemistry_solver.dissolved_oxygen))
+        mean_phyto = float(np.mean(chemistry_solver.phytoplankton))
+        hypoxic_fraction = chemistry_solver.get_hypoxic_fraction()
+        
         # --- 1. Direct Chemical Impacts ---
         
-        # Hypoxia impacts sensitive species
-        if chemistry_solver.is_hypoxic():
+        # Hypoxia impacts sensitive species (severity scales with fraction)
+        if hypoxic_fraction > 0.1:  # More than 10% of area is hypoxic
             # Stoneflies are very sensitive to low oxygen
-            self.indicator_species["stoneflies"] *= (1 - 0.5 * delta_time)
+            self.indicator_species["stoneflies"] *= (1 - 0.5 * delta_time * hypoxic_fraction)
             # Top predators are also sensitive
-            self.indicator_species["top_predator"] *= (1 - 0.2 * delta_time)
+            self.indicator_species["top_predator"] *= (1 - 0.2 * delta_time * hypoxic_fraction)
 
         # High nutrient/phytoplankton levels (algal bloom) favor pollution-tolerant species
-        if chemistry_solver.get_parameter("phytoplankton") > 5.0:
-            self.indicator_species["leeches"] += 20 * delta_time
+        if mean_phyto > 5.0:
+            self.indicator_species["leeches"] += 20 * delta_time * (mean_phyto / 10.0)
         
         # --- 2. Trophic Cascade Logic ---
 
