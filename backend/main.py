@@ -6,6 +6,8 @@ from .core.chemistry_solver import ChemistrySolver
 from .core.biology_solver import BiologySolver
 from .core.remediation_manager import RemediationManager, RemediationType
 from .core.regulatory_monitor import RegulatoryMonitor
+from .core.target_profiles import TARGET_PROFILES, TargetProfile
+from .core.lesson_presets import list_lessons, get_lesson
 
 app = FastAPI(
     title="Hydro-Ecologist API",
@@ -25,11 +27,51 @@ app.add_middleware(
 )
 
 # --- Simulation Singleton Instances ---
-physics_solver = PhysicsSolver(grid_shape=(100, 100), domain_size=(200.0, 200.0))
-chemistry_solver = ChemistrySolver(grid_shape=(100, 100), domain_size=(200.0, 200.0))
-biology_solver = BiologySolver()
-remediation_manager = RemediationManager(grid_shape=(100, 100))
-regulatory_monitor = RegulatoryMonitor(waterbody_type="warm_water_fishery")
+active_target_id = "coastal_estuary"
+
+
+def _apply_target_profile(profile: TargetProfile):
+    """(Re)initialize all simulation components for the given target profile."""
+    global physics_solver, chemistry_solver, biology_solver, remediation_manager, regulatory_monitor, active_target_id
+
+    active_target_id = profile.id
+
+    physics_solver = PhysicsSolver(grid_shape=profile.grid_shape, domain_size=profile.domain_size)
+    physics_solver.h0 = profile.mean_depth_m
+    physics_solver.nu = profile.eddy_viscosity_m2_s
+    physics_solver.h = physics_solver.h0 + physics_solver.eta
+
+    chemistry_solver = ChemistrySolver(grid_shape=profile.grid_shape, domain_size=profile.domain_size)
+    if profile.baseline:
+        # Uniform baseline initialization (screening/education level)
+        if "nutrient" in profile.baseline:
+            chemistry_solver.nutrient.fill(profile.baseline["nutrient"])
+        if "phytoplankton" in profile.baseline:
+            chemistry_solver.phytoplankton.fill(profile.baseline["phytoplankton"])
+        if "zooplankton" in profile.baseline:
+            chemistry_solver.zooplankton.fill(profile.baseline["zooplankton"])
+        if "detritus" in profile.baseline:
+            chemistry_solver.detritus.fill(profile.baseline["detritus"])
+        if "dissolved_oxygen" in profile.baseline:
+            chemistry_solver.dissolved_oxygen.fill(profile.baseline["dissolved_oxygen"])
+        if "ph" in profile.baseline:
+            chemistry_solver.ph.fill(profile.baseline["ph"])
+        if "bod" in profile.baseline:
+            chemistry_solver.bod.fill(profile.baseline["bod"])
+        if "temperature" in profile.baseline:
+            chemistry_solver.temperature.fill(profile.baseline["temperature"])
+
+    biology_solver = BiologySolver()
+    remediation_manager = RemediationManager(grid_shape=profile.grid_shape)
+    regulatory_monitor = RegulatoryMonitor(waterbody_type=profile.waterbody_type)
+
+
+def _get_active_profile() -> TargetProfile:
+    return TARGET_PROFILES.get(active_target_id) or TARGET_PROFILES["coastal_estuary"]
+
+
+# Initialize with default target
+_apply_target_profile(_get_active_profile())
 
 # --- Main Simulation Loop with Physics-Chemistry Coupling ---
 def run_simulation_step():
@@ -69,14 +111,73 @@ def trigger_simulation_step():
 
 @app.post("/simulation/reset", tags=["Simulation"])
 def reset_simulation():
-    # Resets all simulation components to initial state
-    global physics_solver, chemistry_solver, biology_solver, remediation_manager, regulatory_monitor
-    physics_solver = PhysicsSolver(grid_shape=(100, 100), domain_size=(200.0, 200.0))
-    chemistry_solver = ChemistrySolver(grid_shape=(100, 100), domain_size=(200.0, 200.0))
-    biology_solver = BiologySolver()
-    remediation_manager = RemediationManager(grid_shape=(100, 100))
-    regulatory_monitor.reset()
-    return {"message": "Simulation reset to initial state."}
+    # Resets all simulation components to the current active target profile
+    profile = _get_active_profile()
+    _apply_target_profile(profile)
+    return {"message": "Simulation reset to target baseline.", "active_target": profile.id}
+
+
+@app.get("/targets", tags=["Targets"])
+def list_targets():
+    """List available target environments (education/screening profiles)."""
+    return {
+        "active_target": active_target_id,
+        "targets": [
+            {
+                "id": p.id,
+                "name": p.name,
+                "description": p.description,
+                "grid_shape": list(p.grid_shape),
+                "domain_size": list(p.domain_size),
+                "waterbody_type": p.waterbody_type,
+                "mean_depth_m": p.mean_depth_m,
+                "eddy_viscosity_m2_s": p.eddy_viscosity_m2_s,
+                "baseline": p.baseline or {},
+            }
+            for p in TARGET_PROFILES.values()
+        ],
+    }
+
+
+@app.get("/targets/active", tags=["Targets"])
+def get_active_target():
+    p = _get_active_profile()
+    return {
+        "id": p.id,
+        "name": p.name,
+        "description": p.description,
+        "grid_shape": list(p.grid_shape),
+        "domain_size": list(p.domain_size),
+        "waterbody_type": p.waterbody_type,
+        "mean_depth_m": p.mean_depth_m,
+        "eddy_viscosity_m2_s": p.eddy_viscosity_m2_s,
+        "baseline": p.baseline or {},
+    }
+
+
+@app.post("/targets/select", tags=["Targets"])
+def select_target(target_id: str):
+    """Select a target environment profile and reset simulation to its baseline."""
+    profile = TARGET_PROFILES.get(target_id)
+    if profile is None:
+        return {"error": f"Unknown target_id: {target_id}", "available": list(TARGET_PROFILES.keys())}
+
+    _apply_target_profile(profile)
+    return {
+        "message": "Target selected and simulation reset.",
+        "active_target": profile.id,
+        "profile": {
+            "id": profile.id,
+            "name": profile.name,
+            "description": profile.description,
+            "grid_shape": list(profile.grid_shape),
+            "domain_size": list(profile.domain_size),
+            "waterbody_type": profile.waterbody_type,
+            "mean_depth_m": profile.mean_depth_m,
+            "eddy_viscosity_m2_s": profile.eddy_viscosity_m2_s,
+            "baseline": profile.baseline or {},
+        },
+    }
 
 @app.post("/simulation/inject", tags=["Simulation"])
 def inject_parameters(nutrient: float = 0, pollutant: float = 0):
@@ -285,3 +386,99 @@ def set_waterbody_type(waterbody_type: str = "warm_water_fishery"):
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the Hydro-Ecologist Backend. See /docs for API details."}
+
+
+@app.get("/lessons", tags=["Lessons"])
+def get_lessons(target_id: str | None = None):
+    """List guided lesson presets (education scenarios).
+
+    If target_id is provided, filters to lessons intended for that target.
+    """
+    lessons = list_lessons(target_id)
+    return {
+        "target_id": target_id,
+        "lessons": [
+            {
+                "id": l.id,
+                "target_id": l.target_id,
+                "name": l.name,
+                "description": l.description,
+            }
+            for l in lessons
+        ],
+    }
+
+
+@app.post("/lessons/run", tags=["Lessons"])
+def run_lesson(lesson_id: str):
+    """Run a guided lesson preset.
+
+    This will typically switch the target and reset to baseline before applying actions.
+    """
+    lesson = get_lesson(lesson_id)
+    if lesson is None:
+        return {"error": f"Unknown lesson_id: {lesson_id}"}
+
+    # Apply lesson actions in order
+    for action in lesson.actions:
+        if action.type == "select_target":
+            tid = action.params.get("target_id")
+            profile = TARGET_PROFILES.get(tid)
+            if profile is None:
+                return {"error": f"Lesson references unknown target_id: {tid}"}
+            _apply_target_profile(profile)
+
+        elif action.type == "reset":
+            _apply_target_profile(_get_active_profile())
+
+        elif action.type == "inject":
+            nutrient = float(action.params.get("nutrient", 0.0))
+            pollutant = float(action.params.get("pollutant", 0.0))
+            if nutrient > 0:
+                chemistry_solver.nutrient += nutrient
+            if pollutant > 0:
+                chemistry_solver.bod += pollutant
+                chemistry_solver.dissolved_oxygen -= pollutant * 0.5
+
+        elif action.type == "heatwave":
+            activate = bool(action.params.get("activate", True))
+            intensity = float(action.params.get("intensity", 3.5))
+            if activate:
+                chemistry_solver.activate_marine_heatwave(intensity)
+            else:
+                chemistry_solver.deactivate_marine_heatwave()
+
+        elif action.type == "deploy_remediation":
+            x = int(action.params.get("x", 50))
+            y = int(action.params.get("y", 50))
+            radius = int(action.params.get("radius", 10))
+            intervention_type = str(action.params.get("intervention_type", "aeration"))
+            intensity = float(action.params.get("intensity", 1.0))
+            rem_type = RemediationType(intervention_type)
+            remediation_manager.deploy_intervention(x, y, radius, rem_type, intensity)
+
+        elif action.type == "step_n":
+            n = int(action.params.get("n", 1))
+            for _ in range(max(0, n)):
+                run_simulation_step()
+
+        else:
+            return {"error": f"Unsupported lesson action: {action.type}"}
+
+    # Snapshot for the UI to immediately display something coherent
+    return {
+        "message": "Lesson applied.",
+        "lesson": {
+            "id": lesson.id,
+            "target_id": lesson.target_id,
+            "name": lesson.name,
+            "description": lesson.description,
+        },
+        "active_target": active_target_id,
+        "status": {
+            "chemistry": chemistry_solver.get_mean_parameters(),
+            "health_status": biology_solver.get_health_status(),
+            "regulatory": regulatory_monitor.assess_compliance(chemistry_solver.get_mean_parameters()),
+            "remediation": remediation_manager.get_summary(),
+        },
+    }

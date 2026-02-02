@@ -125,6 +125,19 @@ export default function SpatialVisualization({ spatialGrid, parameter, onParamet
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const info = parameterInfo[parameter] || parameterInfo.dissolved_oxygen;
 
+    const legendGradient =
+        info.colormap === 'oxygen'
+            ? 'rgb(220,30,30), rgb(220,200,60), rgb(6,182,208)'
+            : info.colormap === 'nutrient'
+            ? 'rgb(10,50,130), rgb(30,150,100), rgb(50,235,50)'
+            : info.colormap === 'phyto'
+            ? 'rgb(20,80,30), rgb(60,180,70), rgb(140,255,100)'
+            : info.colormap === 'pollutant'
+            ? 'rgb(30,100,150), rgb(100,70,80), rgb(180,50,30)'
+            : info.colormap === 'temperature'
+            ? 'rgb(50,100,200), rgb(100,220,150), rgb(220,180,50), rgb(250,50,20)'
+            : 'rgb(68,1,84), rgb(59,82,139), rgb(33,145,140), rgb(94,201,97), rgb(253,231,37)';
+
     useEffect(() => {
         if (!canvasRef.current || !spatialGrid) return;
 
@@ -157,7 +170,7 @@ export default function SpatialVisualization({ spatialGrid, parameter, onParamet
                     Spatial Distribution
                 </h3>
                 <div className="flex items-center justify-center h-96 text-gray-400">
-                    Click "Show Spatial View" to load grid data
+                    Toggle the spatial view to load grid data
                 </div>
             </div>
         );
@@ -187,9 +200,7 @@ export default function SpatialVisualization({ spatialGrid, parameter, onParamet
                         </button>
                     ))}
                 </div>
-            </div>info.colormap === 'temperature'
-                                ? 'rgb(50,100,200), rgb(100,220,150), rgb(220,180,50), rgb(250,50,20)'
-                                : 
+            </div>
 
             <div className="relative bg-slate-950/50 rounded-xl p-4 border border-white/5">
                 <canvas
@@ -205,13 +216,7 @@ export default function SpatialVisualization({ spatialGrid, parameter, onParamet
                 <div className="mt-4 flex items-center gap-3">
                     <div className="flex-1 h-4 rounded-full" style={{
                         background: `linear-gradient(to right, ${
-                            info.colormap === 'oxygen' 
-                                ? 'rgb(220,30,30), rgb(220,200,60), rgb(6,182,208)'
-                                : info.colormap === 'nutrient'
-                                ? 'rgb(10,50,130), rgb(30,150,100), rgb(50,235,50)'
-                                : info.colormap === 'phyto'
-                                ? 'rgb(20,80,30), rgb(60,180,70), rgb(140,255,100)'
-                                : 'rgb(30,100,150), rgb(100,70,80), rgb(180,50,30)'
+                            legendGradient
                         })`
                     }} />
                     <div className="flex justify-between text-xs text-gray-400 w-32">

@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/components/bottomcontrolpanel.tsx","./src/components/dashboard.tsx","./src/components/spatialvisualization.tsx","./src/components/topbar.tsx","./src/hooks/usesimulationdata.ts","./src/three/scene.tsx","./src/three/waterplane.tsx"],"version":"5.9.3"}

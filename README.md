@@ -4,6 +4,8 @@ Hydro-Ecologist is a high-fidelity Digital Twin of a marine ecosystem: a “livi
 
 See [MDD.txt](MDD.txt) for the full Master Design Document.
 
+Project plan / positioning is captured in [docs/ROADMAP.md](docs/ROADMAP.md).
+
 ## Repo Structure
 
 - [backend/](backend/) — FastAPI simulation engine (physics/chemistry/biology)
