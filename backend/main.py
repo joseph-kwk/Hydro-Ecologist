@@ -403,6 +403,13 @@ def get_lessons(target_id: str | None = None):
                 "target_id": l.target_id,
                 "name": l.name,
                 "description": l.description,
+                "actions": [
+                    {
+                        "type": a.type,
+                        "params": a.params,
+                    }
+                    for a in l.actions
+                ],
             }
             for l in lessons
         ],

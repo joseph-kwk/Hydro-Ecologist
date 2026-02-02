@@ -97,6 +97,82 @@ LESSON_PRESETS: List[LessonPreset] = [
             LessonAction(type="step_n", params={"n": 12}),
         ],
     ),
+
+    LessonPreset(
+        id="lake_chronic_loading",
+        target_id="urban_lake",
+        name="Chronic Nutrient Loading",
+        description="Repeated small nutrient inputs can accumulate into bloom risk over time.",
+        actions=[
+            LessonAction(type="select_target", params={"target_id": "urban_lake"}),
+            LessonAction(type="reset", params={}),
+            LessonAction(type="inject", params={"nutrient": 4.0, "pollutant": 0.0}),
+            LessonAction(type="step_n", params={"n": 6}),
+            LessonAction(type="inject", params={"nutrient": 4.0, "pollutant": 0.0}),
+            LessonAction(type="step_n", params={"n": 6}),
+            LessonAction(type="inject", params={"nutrient": 4.0, "pollutant": 0.0}),
+            LessonAction(type="step_n", params={"n": 10}),
+        ],
+    ),
+    LessonPreset(
+        id="estuary_compound_stress",
+        target_id="coastal_estuary",
+        name="Compound Stress: Heatwave + Spill",
+        description="Combine a heatwave with a BOD/pollutant pulse and observe compounding DO stress.",
+        actions=[
+            LessonAction(type="select_target", params={"target_id": "coastal_estuary"}),
+            LessonAction(type="reset", params={}),
+            LessonAction(type="heatwave", params={"activate": True, "intensity": 4.0}),
+            LessonAction(type="inject", params={"nutrient": 0.0, "pollutant": 2.5}),
+            LessonAction(type="step_n", params={"n": 20}),
+        ],
+    ),
+    LessonPreset(
+        id="river_nutrient_pulse",
+        target_id="cold_river",
+        name="River Nutrient Pulse",
+        description="Single nutrient pulse in a cold river target to contrast bloom dynamics vs lakes.",
+        actions=[
+            LessonAction(type="select_target", params={"target_id": "cold_river"}),
+            LessonAction(type="reset", params={}),
+            LessonAction(type="inject", params={"nutrient": 8.0, "pollutant": 0.0}),
+            LessonAction(type="step_n", params={"n": 12}),
+        ],
+    ),
+    LessonPreset(
+        id="lake_aeration_early",
+        target_id="urban_lake",
+        name="Aeration Timing (Early)",
+        description="Deploy aeration soon after a BOD shock and compare recovery to the late case.",
+        actions=[
+            LessonAction(type="select_target", params={"target_id": "urban_lake"}),
+            LessonAction(type="reset", params={}),
+            LessonAction(type="inject", params={"nutrient": 0.0, "pollutant": 3.0}),
+            LessonAction(type="step_n", params={"n": 2}),
+            LessonAction(
+                type="deploy_remediation",
+                params={"x": 50, "y": 50, "radius": 12, "intervention_type": "aeration", "intensity": 1.0},
+            ),
+            LessonAction(type="step_n", params={"n": 12}),
+        ],
+    ),
+    LessonPreset(
+        id="lake_aeration_late",
+        target_id="urban_lake",
+        name="Aeration Timing (Late)",
+        description="Wait longer before aeration after a BOD shock; compare recovery to early action.",
+        actions=[
+            LessonAction(type="select_target", params={"target_id": "urban_lake"}),
+            LessonAction(type="reset", params={}),
+            LessonAction(type="inject", params={"nutrient": 0.0, "pollutant": 3.0}),
+            LessonAction(type="step_n", params={"n": 10}),
+            LessonAction(
+                type="deploy_remediation",
+                params={"x": 50, "y": 50, "radius": 12, "intervention_type": "aeration", "intensity": 1.0},
+            ),
+            LessonAction(type="step_n", params={"n": 12}),
+        ],
+    ),
 ]
 
 

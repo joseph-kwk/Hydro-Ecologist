@@ -214,6 +214,8 @@ export default function Dashboard() {
   const [runA, setRunA] = React.useState<RunSnapshot | null>(null);
   const [runB, setRunB] = React.useState<RunSnapshot | null>(null);
 
+  const [expandedLessonId, setExpandedLessonId] = React.useState<string | null>(null);
+
   const markAction = React.useCallback((label: string) => {
     const snap = toChemistrySnapshot(chemistryRef.current);
     setPrevChemistry(snap);
@@ -621,27 +623,60 @@ export default function Dashboard() {
 
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
             {lessons.map((l) => (
-              <button
+              <div
                 key={l.id}
-                onClick={async () => {
-                  markAction(`Run lesson: ${l.name}`);
-                  const result = await runLesson(l.id);
-                  if (result && showSpatialView) {
-                    fetchSpatialGrid(spatialParameter, 4);
-                  }
-                }}
-                disabled={isRunningLesson || !!dataError}
-                className="text-left rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 p-4 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="text-left rounded-xl bg-white/5 border border-white/10 p-4 transition-all"
               >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-white font-semibold">{l.name}</div>
-                  <div className="text-xs text-gray-400">{l.target_id}</div>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-white font-semibold">{l.name}</div>
+                    <div className="text-xs text-gray-400 mt-1 leading-relaxed">{l.description}</div>
+                    <div className="text-xs text-gray-500 mt-2">
+                      Target: <span className="text-gray-300">{l.target_id}</span>
+                      {Array.isArray((l as any).actions) ? (
+                        <span className="ml-2">· {(l as any).actions.length} steps</span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 items-end">
+                    <button
+                      onClick={async () => {
+                        markAction(`Run lesson: ${l.name}`);
+                        const result = await runLesson(l.id);
+                        if (result && showSpatialView) {
+                          fetchSpatialGrid(spatialParameter, 4);
+                        }
+                      }}
+                      disabled={isRunningLesson || !!dataError}
+                      className="text-xs px-3 py-2 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/30 text-cyan-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isRunningLesson ? 'Running…' : 'Run'}
+                    </button>
+                    <button
+                      onClick={() => setExpandedLessonId((prev) => (prev === l.id ? null : l.id))}
+                      className="text-xs px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200"
+                    >
+                      {expandedLessonId === l.id ? 'Hide steps' : 'Preview steps'}
+                    </button>
+                  </div>
                 </div>
-                <div className="text-xs text-gray-400 mt-2 leading-relaxed">{l.description}</div>
-                {isRunningLesson && (
-                  <div className="text-xs text-cyan-300 mt-2">Running…</div>
+
+                {expandedLessonId === l.id && Array.isArray((l as any).actions) && (
+                  <div className="mt-3 rounded-lg bg-white/5 border border-white/10 p-3">
+                    <div className="text-xs text-gray-400">Steps</div>
+                    <ol className="mt-2 space-y-2 text-xs text-gray-200 list-decimal list-inside">
+                      {(l as any).actions.map((a: any, idx: number) => (
+                        <li key={`${l.id}-${idx}`} className="leading-relaxed">
+                          <span className="text-gray-100 font-semibold">{String(a.type)}</span>
+                          {a?.params && Object.keys(a.params).length > 0 ? (
+                            <span className="text-gray-400"> · {Object.entries(a.params).map(([k, v]) => `${k}=${String(v)}`).join(', ')}</span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
                 )}
-              </button>
+              </div>
             ))}
 
             {!isFetchingLessons && lessons.length === 0 && (

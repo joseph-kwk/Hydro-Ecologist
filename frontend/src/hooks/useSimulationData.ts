@@ -71,6 +71,10 @@ interface SelectTargetResponse {
 }
 
 interface LessonSummary {
+    actions?: Array<{
+        type: string;
+        params: Record<string, any>;
+    }>;
     id: string;
     target_id: string;
     name: string;
